@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <author>Roland Kádár</author>
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1055</width>
+    <height>699</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <property name="toolButtonStyle">
+   <enum>Qt::ToolButtonStyle::ToolButtonIconOnly</enum>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <widget class="QWidget" name="centralCanvas" native="true">
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <widget class="QStackedWidget" name="stackedCanvas">
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="pageRheoCanvas"/>
+         <widget class="QWidget" name="pageSAXSCanvas"/>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1055</width>
+     <height>33</height>
+    </rect>
+   </property>
+   <property name="defaultUp">
+    <bool>false</bool>
+   </property>
+   <property name="nativeMenuBar">
+    <bool>false</bool>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionSelect_reference_folder"/>
+    <addaction name="actionRecent_folders"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>Tools</string>
+    </property>
+    <addaction name="actionMAX_IV_Connector"/>
+    <addaction name="actionBatch_processor"/>
+    <addaction name="actionData_Writer_to_Template"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuTools"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QToolBar" name="toolBar">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <property name="toolButtonStyle">
+    <enum>Qt::ToolButtonStyle::ToolButtonIconOnly</enum>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>LeftToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionSelect_Reference_Folder"/>
+   <addaction name="separator"/>
+   <addaction name="actionMAX_IV_Connector2"/>
+   <addaction name="separator"/>
+   <addaction name="action_Batch_processor2"/>
+   <addaction name="actionData_Writer_to_Template2"/>
+   <addaction name="separator"/>
+   <addaction name="actionQuit"/>
+  </widget>
+  <action name="actionSelect_reference_folder">
+   <property name="text">
+    <string>Select reference folder</string>
+   </property>
+   <property name="iconVisibleInMenu">
+    <bool>false</bool>
+   </property>
+  </action>
+  <action name="actionMAX_IV_Connector">
+   <property name="text">
+    <string>MAX IV Connector</string>
+   </property>
+  </action>
+  <action name="actionBatch_processor">
+   <property name="text">
+    <string>Batch processor</string>
+   </property>
+  </action>
+  <action name="actionData_Writer_to_Template">
+   <property name="text">
+    <string>Data Writer (to template)</string>
+   </property>
+  </action>
+  <action name="actionRecent_folders">
+   <property name="text">
+    <string>Recent folders</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionMAX_IV_Connector2">
+   <property name="icon">
+    <iconset>
+     <normaloff>_Resources/externaldrive.connected.to.line.below.svg</normaloff>
+     <normalon>Resources/folder.svg</normalon>_Resources/externaldrive.connected.to.line.below.svg</iconset>
+   </property>
+   <property name="text">
+    <string>MAX_IV_Connector2</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_Batch_processor2">
+   <property name="icon">
+    <iconset>
+     <normaloff>_Resources/rectangle.stack.svg</normaloff>_Resources/rectangle.stack.svg</iconset>
+   </property>
+   <property name="text">
+    <string>action_Batch_processor2</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionData_Writer_to_Template2">
+   <property name="icon">
+    <iconset>
+     <normaloff>_Resources/graph.2d.svg</normaloff>_Resources/graph.2d.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Data_Writer_to_template</string>
+   </property>
+  </action>
+  <action name="actionSelect_Reference_Folder">
+   <property name="icon">
+    <iconset>
+     <normaloff>_Resources/folder.svg</normaloff>_Resources/folder.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Select Reference Folder</string>
+   </property>
+   <property name="toolTip">
+    <string>Select_reference_folder2</string>
+   </property>
+   <property name="font">
+    <font/>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionQuit">
+   <property name="icon">
+    <iconset>
+     <normaloff>_Resources/poweroff.svg</normaloff>_Resources/poweroff.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Quit</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,99 @@
+{
+  "hostname": "offline-fe1.maxiv.lu.se",
+  "username": "kroland",
+  "beamline": "ForMAX",
+  "proposal": "20251185",
+  "visit": "2026021208",
+  "local_azint": "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/Temp/FR/20251185/AES:LiTFSI:2.5%CNC_87,5degC/_Temp/formax/20251185/2026021208/azint",
+  "scans_text": "101",
+  "embed_rows": [
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_25degC",
+      "Detail": "With 0%w CNCs@25degC",
+      "Scan interval": "112",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_50degC",
+      "Detail": "With 0%w CNCs@50degC",
+      "Scan interval": "113",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_100degC",
+      "Detail": "With 0%w CNCs@100degC",
+      "Scan interval": "114",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_87,5degC",
+      "Detail": "With 0%w CNCs@87,5degC",
+      "Scan interval": "115",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_75degC",
+      "Detail": "With 0%w CNCs@75degC",
+      "Scan interval": "116",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_50degC",
+      "Detail": "With 0%w CNCs@50degC",
+      "Scan interval": "117",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    },
+    {
+      "Name": "AES:LiTFSI (O:Li=17)_25degC",
+      "Detail": "With 0%w CNCs@25degC",
+      "Scan interval": "118",
+      "background": "",
+      "bg_scale": "",
+      "q_range1": "0.005-0.01"
+    }
+  ],
+  "config_formax": {
+    "empty_i0": 1.0,
+    "empty_it": 1.0,
+    "qSumStart": 0.0,
+    "qSumEnd": 0.0,
+    "absolute_scaling_saxs": 1.0,
+    "absolute_scaling_waxs": 1.0,
+    "thickness": 1.0,
+    "normalization": "transmittance",
+    "save": false,
+    "format": "dat"
+  },
+  "config_cosaxs": {
+    "empty_i0": 1.0,
+    "empty_it": 1.0,
+    "qSumStart": 0.0,
+    "qSumEnd": 0.0,
+    "absolute_scaling_saxs": 1.0,
+    "absolute_scaling_waxs": 1.0,
+    "thickness": 1.0,
+    "normalization": "transmittance",
+    "save": false,
+    "format": "dat"
+  },
+  "bg_scan": "101",
+  "bg_frames": "",
+  "scan_frames": "",
+  "q_range": "0.005-0.01",
+  "bin_frames": 1,
+  "bg_subtract": false,
+  "bg_coeff": 1.0,
+  "last_output_dir": ""
+}

@@ -1,0 +1,23 @@
+{
+  "overfolder": "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/Temp/FR/Nguyen/Paper 2",
+  "modal_saxs": true,
+  "modal_rheo": true,
+  "skip_fresh": false,
+  "dryrun": false,
+  "log_level": "INFO",
+  "dg_template": "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/Temp/FR/Nguyen/Paper 2/RPS 14 1_% NCNF Be Gly 41/Template_Nguyen.dgraph",
+  "dg_cli": "/Applications/DataGraph.app/Contents/Library/dgraph",
+  "run_writer": false,
+  "single_file": true,
+  "workers": 8,
+  "saxs_smoothing": 0.0,
+  "saxs_sigma": 0.5,
+  "saxs_tmin": 75.0,
+  "saxs_tmax": 110.0,
+  "saxs_method": "direct",
+  "saxs_no_plots": false,
+  "saxs_mirror": true,
+  "rheo_mode": "nontriggered",
+  "rheo_steady": 10.0,
+  "rheo_no_plots": false
+}

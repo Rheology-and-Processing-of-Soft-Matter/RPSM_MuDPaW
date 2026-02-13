@@ -1,0 +1,24 @@
+[
+    {
+        "name": "1 mm gap",
+        "files": [
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/1_mean_sem_circle.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/2_extracted_space_time_circle_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/3_a_extracted_space_time_circle_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/4_mean_sem_line.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/5_extracted_space_time_line_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/1 mm gap/6_a_extracted_space_time_line_flattened.csv"
+        ]
+    },
+    {
+        "name": "20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP",
+        "files": [
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/1_mean_sem_circle.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/2_extracted_space_time_circle_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/3_a_extracted_space_time_circle_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/4_mean_sem_line.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/5_extracted_space_time_line_flattened.csv",
+            "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/_Papers/_Submitted_Finished/2025_Rheo_PI_SAXS/_DATA/PS_15min/PI/20250223_112238_CNC4 PS 15MINS SS 0.3MM GAP/6_a_extracted_space_time_line_flattened.csv"
+        ]
+    }
+]
