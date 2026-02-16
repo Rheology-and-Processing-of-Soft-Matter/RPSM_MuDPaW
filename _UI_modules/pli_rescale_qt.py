@@ -7,6 +7,9 @@ import json
 import numpy as np
 import cv2
 import csv
+from _Core.paths import get_processed_root
+from _Core.params import save_params, load_params
+from _UI_modules.PLI_helper import get_reference_folder_from_path, _sanitize_misjoined_user_path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QImage, QPixmap, QPainter, QPen
@@ -1074,8 +1077,9 @@ class PLIRescaleController:
             unscaled_parts = _with_gaps(full_tiles, gap_px, full_tiles[0].shape[0])
             unscaled = np.hstack(unscaled_parts)
 
-            base = self.reference_folder or os.getcwd()
-            temp_dir = os.path.join(base, "PLI", "_Temp")
+            base = _sanitize_misjoined_user_path(self.reference_folder or os.getcwd())
+            ref = get_reference_folder_from_path(base)
+            temp_dir = os.path.join(ref, "PLI", "_Temp")
             os.makedirs(temp_dir, exist_ok=True)
             unscaled_name = f"{base_img}_steady_unscaled_stitched_{unscaled.shape[1]}x{unscaled.shape[0]}.png"
             unscaled_path = os.path.join(temp_dir, unscaled_name)
@@ -1121,7 +1125,7 @@ class PLIRescaleController:
             if stitched.shape[0] != target_h:
                 stitched = cv2.resize(stitched, (stitched.shape[1], target_h), interpolation=cv2.INTER_NEAREST)
 
-            out_dir = os.path.join(base, "_Processed", "PLI")
+            out_dir = str(get_processed_root(ref))
             os.makedirs(out_dir, exist_ok=True)
             out_name = f"{base_img}_steady_rescaled_stitched_{stitched.shape[1]}x{stitched.shape[0]}.png"
             out_path = os.path.join(out_dir, out_name)
@@ -1133,6 +1137,18 @@ class PLIRescaleController:
                     json.dump(meta, f, indent=2)
             except Exception:
                 pass
+            try:
+                save_params(ref, "PLI", "rescale", base_img, {
+                    "target_total_w": target_total_w,
+                    "target_h": target_h,
+                    "gap_px": gap_px,
+                    "tile_widths": tile_widths,
+                    "mode": "rescale_equal_width",
+                    "source": str(unscaled_path),
+                    "output": out_path,
+                })
+            except Exception as e:
+                print(f"[PLI] Warning: could not save last rescale params: {e}")
 
             # Preview the rescaled (equal-width) stitched result with interval boundaries
             try:

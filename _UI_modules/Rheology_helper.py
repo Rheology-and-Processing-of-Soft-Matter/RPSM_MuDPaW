@@ -87,7 +87,7 @@ def get_unified_processed_folder(path):
 # --- Session save/load for options ---
 
 def _rheo_session_path(reference_folder: str) -> str:
-    processed_root = os.path.join(reference_folder, "_Processed")
+    processed_root = os.path.join(reference_folder, "_Processed", "_Params")
     os.makedirs(processed_root, exist_ok=True)
     return os.path.join(processed_root, "_rheo_reader_session.json")
 
@@ -357,7 +357,6 @@ def engage_viscosity(path, sample_name, window, preset_start_entry, preset_end_e
     processed_folder = get_unified_processed_folder(path)
     print(f"Unified _Processed folder for Rheology outputs: {processed_folder}")
     output_file = os.path.join(processed_folder, f"_viscosity_{sample_name}.csv")
-    json_path = os.path.join(processed_folder, f"_output_Rheology_{sample_name}.json")
     print(f"Output CSV will be written to: {output_file}")
     print(f"Unified Rheology JSON path: {json_path}")
     #output_file = os.path.join(path, f"{sample_name}_viscosity_output.csv")
@@ -415,7 +414,6 @@ def process_all_rheology_files(path, sample_folders):
 
             import json
             output_file = os.path.join(processed_folder, f"_viscosity_{sample_name}.csv")
-            json_path = os.path.join(processed_folder, f"_output_Rheology_{sample_name}.json")
             with open(json_path, "w") as f:
                 json.dump({
                     "sample_name": sample_name,

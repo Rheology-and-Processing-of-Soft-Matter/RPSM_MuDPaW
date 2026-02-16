@@ -431,8 +431,6 @@ def engage_pi(path, sample_name, window, gap_entry, add_action, update_actions_l
                                 has_axis = any('axis' in f.lower() for f in csvs)
                             except Exception:
                                 has_axis = False
-                            else:
-                                mirror_temp_file_to_processed(path, "_output_PI_axis.json")
                         else:
                             print(f"[PI] Axis processor not found: {script_path2}")
                     # Only run axis script for steady_state mode
@@ -453,7 +451,7 @@ def engage_pi(path, sample_name, window, gap_entry, add_action, update_actions_l
                             window.after(0, add_action, sample_name, "PI processing failed", "red")
                             window.after(0, update_actions_list, window, sample_name)
                             return
-                        mirror_temp_file_to_processed(path, "_output_PI_axis.json")
+                        
 
                     window.after(0, add_action, sample_name, "PI processing completed", "green")
                     window.after(0, update_actions_list, window, sample_name)

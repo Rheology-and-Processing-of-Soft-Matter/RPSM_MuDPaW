@@ -1080,7 +1080,7 @@ class MainWindow(QMainWindow):
         action_batch = self.findChild(QAction, "action_Batch_processor2")
         if action_batch is not None:
             action_batch.triggered.connect(self._show_batch)
-
+    
         # Info/About menu
         menubar = self.menuBar()
         if menubar is not None:
@@ -1337,7 +1337,12 @@ class MainWindow(QMainWindow):
 
     def open_pli_analyzer(self, stitched_path: str) -> None:
         try:
-            from _UI_modules.pli_analyzer_qt import PLIAnalyzerPreview, PLIAnalyzerControls, PLIAnalyzerController
+            from _UI_modules.pli_analyzer_qt import (
+                PLIAnalyzerPreview,
+                PLIAnalyzerControls,
+                PLIAnalyzerController,
+            )
+            from _UI_modules.PLI_helper import _sanitize_misjoined_user_path
         except Exception as e:
             self.logger.error(f"[PLI] Could not load Qt analyzer: {e}")
             return
@@ -1345,6 +1350,8 @@ class MainWindow(QMainWindow):
         if not stitched_path:
             self.logger.info("[PLI] Select a stitched panel first.")
             return
+
+        stitched_path = _sanitize_misjoined_user_path(stitched_path)
 
         preview = PLIAnalyzerPreview(self)
         controls = PLIAnalyzerControls(parent=self.processingPanel)

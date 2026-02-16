@@ -4,6 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
+from _Core.params import save_params, load_params
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -150,6 +151,16 @@ class SAXSInspector:
         method_row.addStretch(1)
         layout.addLayout(method_row)
 
+        peak_display = None
+        if two_peak:
+            peak_row = QHBoxLayout()
+            peak_row.addWidget(QLabel("Show peak", page))
+            peak_display = QComboBox(page)
+            peak_display.addItems(["Peak 2", "Peak 1"])  # default to Peak 2 (previous behavior)
+            peak_row.addWidget(peak_display)
+            peak_row.addStretch(1)
+            layout.addLayout(peak_row)
+
         side_row = QHBoxLayout()
         side_row.addWidget(QLabel("Peak side", page))
         peak_side = QComboBox(page)
@@ -263,6 +274,7 @@ class SAXSInspector:
             "tail_fit": tail_fit,
             "fit_extent": fit_extent,
             "folder_label": folder_label,
+            "peak_display": peak_display,
             "table": table,
         }
         method_fit.stateChanged.connect(lambda _=False, w=widgets: self._set_method("fitting", w))
@@ -300,7 +312,42 @@ class SAXSInspector:
         else:
             flat = [f for f in os.listdir(saxs_folder) if f.lower().endswith(".dat") and not f.startswith("_")]
             for f in sorted(flat, key=str.lower):
-                samples.append({"name": f, "path": os.path.join(saxs_folder, f), "kind": "file"})
+                pass
+
+    def _apply_params(self, widgets: dict, payload: dict) -> None:
+        if not payload:
+            return
+        try:
+            if "smoothing" in payload:
+                widgets["smoothing"].setValue(float(payload["smoothing"]))
+            if "sigma" in payload:
+                widgets["sigma"].setValue(float(payload["sigma"]))
+            if "theta_min" in payload:
+                widgets["theta_min"].setValue(float(payload["theta_min"]))
+            if "theta_max" in payload:
+                widgets["theta_max"].setValue(float(payload["theta_max"]))
+            self._set_method(payload.get("method", "fitting"), widgets)
+            if "mirror" in payload:
+                widgets["mirror"].setChecked(bool(payload["mirror"]))
+            if widgets.get("theta2_min") is not None and payload.get("lower2") is not None:
+                widgets["theta2_min"].setValue(float(payload["lower2"]))
+            if widgets.get("theta2_max") is not None and payload.get("upper2") is not None:
+                widgets["theta2_max"].setValue(float(payload["upper2"]))
+            if widgets.get("tail_fit") is not None and payload.get("tail_fit") is not None:
+                widgets["tail_fit"].setChecked(bool(payload["tail_fit"]))
+            if widgets.get("fit_extent") is not None and payload.get("fit_extent") is not None:
+                widgets["fit_extent"].setValue(float(payload["fit_extent"]))
+            if "average" in payload:
+                widgets["average"].setChecked(bool(payload["average"]))
+            if "average_group" in payload:
+                widgets["average_group"].setValue(int(payload.get("average_group") or 4))
+            if widgets.get("peak_side") is not None and payload.get("side_mode"):
+                widgets["peak_side"].setCurrentText(str(payload["side_mode"]))
+            if widgets.get("peak2_side") is not None and payload.get("side_mode2"):
+                widgets["peak2_side"].setCurrentText(str(payload["side_mode2"]))
+        except Exception as e:
+            print(f"[SAXS] Warning: could not apply saved params: {e}")
+
         self._saxs_samples = samples
 
         for w in self._saxs_tab_widgets.values():
@@ -367,6 +414,15 @@ class SAXSInspector:
             if "MUDRAW_SAXS_NO_PLOTS" in os.environ:
                 os.environ.pop("MUDRAW_SAXS_NO_PLOTS", None)
             w = self._active()
+            # Auto-load per-sample saved params (if any)
+            try:
+                ref = get_reference_folder_from_path(sample_path)
+                saved = load_params(ref, "SAXS", "process", label)
+                if saved and isinstance(saved.get("payload"), dict):
+                    self._apply_params(w, saved["payload"])
+            except Exception as e:
+                print(f"[SAXS] Warning: could not load saved params: {e}")
+
             two_peak = w.get("theta2_min") is not None
             secondary = (
                 (w["theta2_min"].value(), w["theta2_max"].value())
@@ -396,6 +452,27 @@ class SAXSInspector:
                 side_mode=w["peak_side"].currentText(),
                 side_mode2=w["peak2_side"].currentText() if w.get("peak2_side") is not None else "auto",
             )
+            # Save per-sample params
+            try:
+                payload = {
+                    "smoothing": float(w["smoothing"].value()),
+                    "sigma": float(w["sigma"].value()),
+                    "theta_min": float(w["theta_min"].value()),
+                    "theta_max": float(w["theta_max"].value()),
+                    "method": "fitting" if w["method_fit"].isChecked() else "direct",
+                    "mirror": bool(w["mirror"].isChecked()),
+                    "lower2": float(w.get("theta2_min").value()) if w.get("theta2_min") is not None else None,
+                    "upper2": float(w.get("theta2_max").value()) if w.get("theta2_max") is not None else None,
+                    "tail_fit": bool(w.get("tail_fit").isChecked()) if w.get("tail_fit") is not None else None,
+                    "fit_extent": float(w.get("fit_extent").value()) if w.get("fit_extent") is not None else None,
+                    "average": bool(w["average"].isChecked()),
+                    "average_group": int(w["average_group"].value()),
+                    "side_mode": w["peak_side"].currentText(),
+                    "side_mode2": w.get("peak2_side").currentText() if w.get("peak2_side") is not None else None,
+                }
+                save_params(get_reference_folder_from_path(sample_path), "SAXS", "process", label, payload)
+            except Exception as e:
+                print(f"[SAXS] Warning: could not save params: {e}")
             if fig is None and not w["fast"].isChecked():
                 try:
                     if two_peak:
@@ -418,8 +495,28 @@ class SAXSInspector:
                     pass
             if w["persist"].isChecked():
                 self._save_defaults()
-            if not w["fast"].isChecked() and fig is not None:
-                self._display_figure(fig)
+            if not w["fast"].isChecked():
+                try:
+                    from _Routines.SAXS import SAXS_data_processor_v4 as sdp
+                    figs = getattr(sdp, "LAST_FIGS", None)
+                    if figs and isinstance(figs, list) and len(figs) >= 1:
+                        # Choose which peak to show based on combo selection (default latest)
+                        sel = None
+                        combo = w.get("peak_display")
+                        if combo is not None:
+                            sel = combo.currentText()
+                        if sel == "Peak 1" and len(figs) >= 1:
+                            fig_to_show = figs[0]
+                        elif sel == "Peak 2" and len(figs) >= 2:
+                            fig_to_show = figs[1]
+                        else:
+                            fig_to_show = figs[-1]
+                        self._display_figure(fig_to_show)
+                    elif fig is not None:
+                        self._display_figure(fig)
+                except Exception:
+                    if fig is not None:
+                        self._display_figure(fig)
         except Exception as e:
             self.main._log_exception("SAXS processing failed", e)
 

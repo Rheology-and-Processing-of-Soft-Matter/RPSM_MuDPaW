@@ -820,25 +820,14 @@ def process_file(path: str, mode: str = 'triggered', steady_sec: float = 10.0, r
         'n_intervals': len(interval_rows),
         'intervals': interval_rows[:50],
     }
-    # Write steady CSV first and include its path in JSON
+    # Write steady CSV only; skip JSON metadata
     try:
         ref = get_reference_folder_from_path(path)
         processed = os.path.join(ref, "_Processed")
         os.makedirs(processed, exist_ok=True)
         base = os.path.splitext(os.path.basename(path))[0]
         csv_path = os.path.join(processed, f"Rheo_steady_{base}.csv")
-        # DataGraph-friendly CSV with one row per interval
         _write_steady_csv(path, steady_rates, steady_taus, steady_viscs)
-        # Advertise CSV in JSON for downstream tools (absolute + relative for portability)
-        out['csv_output'] = csv_path
-        out['csv_outputs'] = [csv_path]
-        rel_suffix = csv_path.split('/_Processed/', 1)[1] if '/_Processed/' in csv_path else os.path.basename(csv_path)
-        out['csv_output_rel'] = rel_suffix
-        out['csv_outputs_rel'] = [rel_suffix]
-        jout = os.path.join(processed, f"_output_Rheology_{base}.json")
-        with open(jout, 'w', encoding='utf-8') as fh:
-            json.dump(out, fh, indent=2)
-        print("[Rheology] wrote:", jout)
     except Exception as e:
         print("[Rheology] write outputs failed:", e)
 

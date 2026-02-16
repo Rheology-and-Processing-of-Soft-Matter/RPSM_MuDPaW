@@ -25,6 +25,9 @@ except Exception:
 
 import re
 
+from pathlib import Path
+from _Core.paths import get_processed_root
+
 # --- Analyzer window guards (prevent duplicate openings) ---
 _ANALYZER_ACTIVE = False
 _ANALYZER_WIN = None
@@ -107,15 +110,13 @@ def get_reference_folder_from_path(path):
     return ref
 
 def get_unified_processed_folder(path):
-    """Return the unified `_Processed/PLI` folder inside the resolved *reference* folder."""
-    reference_folder = get_reference_folder_from_path(path)
-    processed_root = os.path.join(reference_folder, "_Processed", "PLI")
-    processed_root = _sanitize_misjoined_user_path(processed_root)
-    processed_root = os.path.abspath(processed_root)
-    if not processed_root.startswith(os.sep):
-        processed_root = os.sep + processed_root
+    """Return the unified `<reference>/_Processed/PLI` using canonical processed-root."""
+    abspath = _sanitize_misjoined_user_path(os.path.abspath(path))
+    reference_folder = get_reference_folder_from_path(abspath)
+    processed_root = get_processed_root(reference_folder)
+    processed_root = processed_root.resolve()
     os.makedirs(processed_root, exist_ok=True)
-    return processed_root
+    return str(processed_root)
 
 
 # --- Frame & interval utilities ---
@@ -276,7 +277,7 @@ def run_stitched_processing(path: str, reverse_from_end: bool = True, intervals_
         raise FileNotFoundError(path)
     sample_name = os.path.splitext(os.path.basename(path))[0]
     processed_folder = get_unified_processed_folder(path)
-    processed_pli = os.path.join(processed_folder, "PLI")
+    processed_pli = processed_folder  # already .../_Processed/PLI
     os.makedirs(processed_pli, exist_ok=True)
 
     img_bgr = cv2.imread(path, cv2.IMREAD_COLOR)
@@ -361,30 +362,8 @@ def run_stitched_processing(path: str, reverse_from_end: bool = True, intervals_
     fits_csv = os.path.join(processed_pli, f'_pli_{sample_name}_stitched_fit_params.csv')
     pd.DataFrame(fit_params).to_csv(fits_csv, index=False)
 
-    json_path = os.path.join(processed_pli, f'_output_PLI_{sample_name}.json')
-    # Derive relative suffixes after '/_Processed/' when possible
-    _rel_profiles = out_csv.split('/_Processed/', 1)[1] if '/_Processed/' in out_csv else os.path.basename(out_csv)
-    _rel_fits = fits_csv.split('/_Processed/', 1)[1] if '/_Processed/' in fits_csv else os.path.basename(fits_csv)
-    meta = {
-        'mode': 'stitched_png',
-        'sample_name': sample_name,
-        'processed_folder': processed_folder,
-        'stitched_png': os.path.abspath(path),
-        'profiles_csv': out_csv,
-        'profiles_csv_rel': _rel_profiles,
-        'intervals': {'x_segments': x_segments, 'interval_width': interval_width},
-        'parameter': 'sqrt(a^2+b^2)',
-        'fits_csv': fits_csv,
-        'fits_csv_rel': _rel_fits,
-        'fit_model': 'gaussian+baseline',
-        'x_axis': 'angle_deg',
-        'baseline_correction': 'subtract fitted B per interval',
-    }
-    with open(json_path, 'w') as f:
-        json.dump(meta, f, indent=2)
     print(f"Saved stitched profiles (with fits): {out_csv}")
-    print(f"PLI output JSON written: {json_path}")
-    return out_csv, json_path
+    return out_csv, None
 
 
 def _find_unscaled_stitched_in_temp(any_path: str) -> str | None:
@@ -469,7 +448,7 @@ def main():
 
 
     processed_folder = get_unified_processed_folder(path)
-    processed_pli = os.path.join(processed_folder, "PLI")
+    processed_pli = processed_folder  # already .../_Processed/PLI
     os.makedirs(processed_pli, exist_ok=True)
     print(f"Unified _Processed folder for PLI outputs: {processed_folder}")
 
@@ -528,22 +507,6 @@ def main():
         pd.DataFrame(st).to_csv(output_csv, index=False)
         print(f"Saved space-time diagram: {output_csv}")
 
-        json_path = os.path.join(processed_pli, f"_output_PLI_{sample_name}.json")
-        _rel_csv = output_csv.split('/_Processed/', 1)[1] if '/_Processed/' in output_csv else os.path.basename(output_csv)
-        meta = {
-            "sample_name": sample_name,
-            "processed_folder": processed_folder,
-            "csv_output": output_csv,
-            "csv_output_rel": _rel_csv,
-            "intervals": prov,
-        }
-        if args.time_source:
-            meta["time_source"] = os.path.abspath(args.time_source)
-            meta["fps_used"] = float(args.fps)
-            meta["reverse_from_end"] = bool(args.reverse_from_end)
-        with open(json_path, "w") as f:
-            json.dump(meta, f, indent=2)
-        print(f"PLI output JSON written: {json_path}")
     except Exception as e:
         print(f"Failed to process space-time diagram: {e}")
         sys.exit(2)
@@ -1445,7 +1408,6 @@ def open_maltese_cross_analyzer(stitched_path: str, interval_height: int = 300):
 
             # Save results to CSV with parameter and limits in filename
             out_root = get_unified_processed_folder(stitched_path)
-            out_root = get_unified_processed_folder(stitched_path)
             out_dir = out_root
             os.makedirs(out_dir, exist_ok=True)
             base = os.path.splitext(os.path.basename(stitched_path))[0]
@@ -1486,83 +1448,7 @@ def open_maltese_cross_analyzer(stitched_path: str, interval_height: int = 300):
             dg_df.to_csv(dg_csv, index=False)
             print(f"Saved DataGraph-ready CSV: {dg_csv}")
 
-            # Update single master PLI JSON so the writer detects everything by image name
-            master_json = os.path.join(out_dir, f"_output_PLI_{base}.json")
-            # If stitched processing hasn't created a master file yet, create a minimal one
-            master_obj = {
-                "mode": "pli",
-                "source_png": os.path.abspath(stitched_path),
-                "processed_folder": get_unified_processed_folder(stitched_path),
-                "datasets": {}
-            }
-            if os.path.isfile(master_json):
-                try:
-                    with open(master_json, "r") as _f:
-                        master_obj = json.load(_f) or master_obj
-                except Exception as _e:
-                    print(f"[PLI] Warning: could not read master JSON; recreating: {_e}")
-            # Ensure datasets dict exists
-            if not isinstance(master_obj.get("datasets"), dict):
-                master_obj["datasets"] = {}
-
-            # Key by image base name so the writer can find it via drop-down
-            key = base
-            entry = master_obj["datasets"].get(key, {})
-            # Ensure nested maltese_cross dict
-            if not isinstance(entry.get("maltese_cross"), dict):
-                entry["maltese_cross"] = {}
-
-            # Build a unique tag for this analysis (parameter + window)
-            analysis_tag = f"{mode_tag}|{lim_tag}"
-            # Columns list for JSON
-            columns_list = [
-                "interval_global", "interval_rel",
-                "FWHM_norm", "HWHM_norm", "HUH",
-                "AUC_exp_norm"
-            ]
-            auc_fit_included = False
-            if 'AUC_fit_vec' in locals() and AUC_fit_vec is not None and AUC_fit_vec.size == len(cols):
-                columns_list.append("AUC_fit_norm")
-                auc_fit_included = True
-            _rel_summary = csv_out.split('/_Processed/', 1)[1] if '/_Processed/' in csv_out else os.path.basename(csv_out)
-            _rel_dg = dg_csv.split('/_Processed/', 1)[1] if '/_Processed/' in dg_csv else os.path.basename(dg_csv)
-            entry["maltese_cross"][analysis_tag] = {
-                "parameter": mode,
-                "axis_limits": [a_lo, a_hi],
-                "x_axis_units": "unit",
-                "summary_csv": os.path.abspath(csv_out),
-                "summary_csv_rel": _rel_summary,
-                "columns": columns_list,
-                "auc_source": "experimental_trapz",
-                "auc_fit_included": auc_fit_included,
-                "n_intervals_total": int(n_intervals),
-                "intervals_analyzed": {"start": int(i0), "end": int(i1)},
-                "hu_definition": "HUH = exp(-(HWHM_rad^2)/ln 2) assuming wrapped-Gaussian",
-                "datagraph_ready": True,
-                "datagraph_csv": os.path.abspath(dg_csv),
-                "datagraph_csv_rel": _rel_dg
-            }
-
-            # Maintain a flat list of DG exports for quick discovery by the writer UI
-            if not isinstance(entry.get("dg_exports"), list):
-                entry["dg_exports"] = []
-            if os.path.abspath(dg_csv) not in entry["dg_exports"]:
-                entry["dg_exports"].append(os.path.abspath(dg_csv))
-            # Maintain relative list for portability
-            rel_list = [
-                (p.split('/_Processed/', 1)[1] if isinstance(p, str) and '/_Processed/' in p else os.path.basename(p) if isinstance(p, str) else p)
-                for p in entry.get("dg_exports", [])
-            ]
-            entry["dg_exports_rel"] = rel_list
-
-            # Write back to master JSON
-            master_obj["datasets"][key] = entry
-            try:
-                with open(master_json, "w") as _f:
-                    json.dump(master_obj, _f, indent=2)
-                print(f"Updated master PLI JSON: {master_json}")
-            except Exception as _e:
-                print(f"[PLI] Failed to update master PLI JSON: {_e}")
+            # JSON metadata removed: filenames are the source of truth for writer/batch.
 
     win.update_idletasks()
 

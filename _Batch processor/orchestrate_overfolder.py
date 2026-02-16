@@ -91,7 +91,11 @@ def discover_references(overfolder: Path) -> List[Path]:
 
 # ------------------------ Standalone calls -----------------------------
 
-def run_saxs_standalone(py: str, base_dir: Path, ref_dir: Path, args: argparse.Namespace) -> None:
+
+def batch_processed_dir(overfolder: Path, ref_dir: Path) -> Path:
+    return overfolder / "_Processed_batch" / ref_dir.name
+
+def run_saxs_standalone(py: str, base_dir: Path, ref_dir: Path, args: argparse.Namespace, processed_root_override: Path | None = None) -> None:
     """Invoke SAXS_data_processor_v4.py for the reference's SAXS folder."""
     script = base_dir.parent / "_Routines" / "SAXS" / "SAXS_data_processor_v4.py"
     if not script.exists():
@@ -117,9 +121,11 @@ def run_saxs_standalone(py: str, base_dir: Path, ref_dir: Path, args: argparse.N
     env["PYTHONPATH"] = os.pathsep.join([repo_root, env.get("PYTHONPATH", "")])
     if args.saxs_no_plots:
         env["MUDRAW_SAXS_NO_PLOTS"] = "1"
+    if processed_root_override is not None:
+        env["MUDPAW_PROCESSED_ROOT"] = str(processed_root_override)
     subprocess.run(cmd, check=True, env=env, cwd=repo_root)
 
-def run_rheology_standalone(py: str, base_dir: Path, ref_dir: Path, args: argparse.Namespace) -> None:
+def run_rheology_standalone(py: str, base_dir: Path, ref_dir: Path, args: argparse.Namespace, processed_root_override: Path | None = None) -> None:
     """Invoke Read_viscosity_v3.py for the reference's Rheology folder."""
     script = base_dir.parent / "_Routines" / "Rheo" / "Read_viscosity_v3.py"
     if not script.exists():
@@ -137,6 +143,8 @@ def run_rheology_standalone(py: str, base_dir: Path, ref_dir: Path, args: argpar
     env = os.environ.copy()
     repo_root = str(base_dir.parent)
     env["PYTHONPATH"] = os.pathsep.join([repo_root, env.get("PYTHONPATH", "")])
+    if processed_root_override is not None:
+        env["MUDPAW_PROCESSED_ROOT"] = str(processed_root_override)
     subprocess.run(cmd, check=True, env=env, cwd=repo_root)
 
 # ------------------------ DataGraph writer -----------------------------
@@ -172,6 +180,13 @@ def _resolve_csvs(data: dict, processed_root: Path) -> List[str]:
     single = data.get("csv_output") or data.get("csv_output_rel")
     if isinstance(single, str):
         candidates.append(single)
+    # PLI-specific DataGraph exports
+    dg_csv = data.get("datagraph_csv") or data.get("datagraph_csv_rel")
+    if isinstance(dg_csv, str):
+        candidates.append(dg_csv)
+    dg_list = data.get("dg_exports") or data.get("dg_exports_rel")
+    if isinstance(dg_list, list):
+        candidates.extend([p for p in dg_list if isinstance(p, str)])
     for key in ("radial_matrix_csv", "radial_flat_csv", "radial_csv"):
         val = data.get(key)
         if isinstance(val, str):
@@ -230,7 +245,19 @@ def _load_modal_entries(ref_dir: Path) -> Dict[str, List[dict]]:
     outputs = {"SAXS": [], "Rheology": [], "PLI": []}
     if not processed.exists():
         return outputs
-    for path in sorted(processed.glob("_output_*.json")):
+    json_paths: list[Path] = list(processed.glob("_output_*.json"))
+    # PLI may write its master JSON under nested PLI folders (e.g., _Processed/PLI/PLI)
+    for pli_dir in (
+        processed / "PLI",
+        processed / "pLI",
+        processed / "pli",
+    ):
+        if pli_dir.exists():
+            json_paths.extend(sorted(pli_dir.glob("_output_*.json")))
+            # Also include deeper PLI subfolders
+            json_paths.extend(sorted(pli_dir.rglob("_output_*.json")))
+
+    for path in sorted(json_paths):
         kind = _categorize_modal(path)
         if not kind:
             continue
@@ -317,7 +344,8 @@ def _build_writer_jobs(ref_dir: Path) -> List[dict]:
     return jobs
 
 def run_datagraph_writer_for_ref(ref_dir: Path, tpl: Path, dg_cli: Path,
-                                 restart_frequency: int | None = None) -> List[str]:
+                                 restart_frequency: int | None = None,
+                                 processed_root_override: Path | None = None) -> List[str]:
     jobs = _build_writer_jobs(ref_dir)
     exports: List[str] = []
     if not jobs:
@@ -340,17 +368,11 @@ def run_datagraph_writer_for_ref(ref_dir: Path, tpl: Path, dg_cli: Path,
         sample = sample or ref_dir.name
         safe_sample = sample.replace(os.sep, "_").strip() or "sample"
         files: List[str] = []
-        processed_root = job.get("processed_root") or (ref_dir / "_Processed")
+        processed_root = job.get("processed_root") or processed_root_override or (ref_dir / "_Processed")
         for raw in job["files"]:
             candidate = Path(raw).expanduser()
             if not candidate.is_absolute():
                 candidate = (processed_root / candidate).resolve()
-            try:
-                if not candidate.resolve().is_relative_to(ref_dir.resolve()):
-                    # Ignore inputs that are not inside this reference; prevents cross-ref duplication.
-                    continue
-            except Exception:
-                pass
             if candidate.exists():
                 files.append(str(candidate))
             else:
@@ -545,6 +567,8 @@ def main() -> None:
     combined_export: str | None = None
     combined_error: str | None = None
     for ref in refs:
+        batch_root = batch_processed_dir(overfolder, ref)
+        batch_root.mkdir(parents=True, exist_ok=True)
         rec: Dict[str, Any] = {
             "reference": ref.name,
             "path": str(ref),
@@ -558,29 +582,29 @@ def main() -> None:
             # --- SAXS ---
             if args.modalities in ("both","saxs") and (ref / "SAXS").exists():
                 sax_in = list_files_recursive(ref / "SAXS")
-                sax_out_dir = ref / "_Processed" / "SAXS"
+                sax_out_dir = batch_root / "SAXS"
                 sax_outs = [sax_out_dir / "output_SAXS.json", sax_out_dir / "output_SAXS.csv"]
                 if args.skip_fresh and is_up_to_date(sax_in, sax_outs):
                     rec["saxs"] = {"status": "skipped_up_to_date", "out": str(sax_out_dir)}
                 else:
-                    run_saxs_standalone(args.py, base_dir, ref, args)
-                    rec["saxs"] = {"status": "called_standalone", "out": str(sax_out_dir)}
+                    run_saxs_standalone(args.py, base_dir, ref, args, processed_root_override=batch_root)
+                    rec["saxs"] = {"status": "called_standalone", "out": str(sax_out_dir), "processed_root": str(batch_root)}
 
             # --- Rheology ---
             if args.modalities in ("both","rheology") and (ref / "Rheology").exists():
                 rh_in = list_files_recursive(ref / "Rheology", exts=[".csv",".txt",".tsv"])
-                rh_out_dir = ref / "_Processed" / "Rheology"
+                rh_out_dir = batch_root / "Rheology"
                 rh_outs = [rh_out_dir / "output_viscosity.json", rh_out_dir / "output_viscosity.csv"]
                 if args.skip_fresh and is_up_to_date(rh_in, rh_outs):
                     rec["rheology"] = {"status": "skipped_up_to_date", "out": str(rh_out_dir)}
                 else:
-                    run_rheology_standalone(args.py, base_dir, ref, args)
-                    rec["rheology"] = {"status": "called_standalone", "out": str(rh_out_dir)}
+                    run_rheology_standalone(args.py, base_dir, ref, args, processed_root_override=batch_root)
+                    rec["rheology"] = {"status": "called_standalone", "out": str(rh_out_dir), "processed_root": str(batch_root)}
 
             # --- DataGraph writer (optional) ---
             if args.write_dg:
                 exports = run_datagraph_writer_for_ref(
-                    ref, tpl_path, dg_cli_path, args.dg_restart_frequency)
+                    ref, tpl_path, dg_cli_path, args.dg_restart_frequency, processed_root_override=batch_root)
                 if exports:
                     rec["writer"] = {"status": "exported", "outputs": exports}
                 else:

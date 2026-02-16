@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from scipy.ndimage import zoom
 import pickle
-import json
 from concurrent.futures import ProcessPoolExecutor
 
 # --- Unified _Processed Folder Helpers ---
@@ -205,17 +204,6 @@ def extract_space_time(
     with open(intervals_path, 'w') as f:
         f.write(str(no_of_pi_intervals))
 
-    json_path = os.path.join(save_dir, "_output_PI_steady.json")
-    with open(json_path, "w") as f:
-        json.dump({
-            "input_dir": input_dir,
-            "processed_folder": save_dir,
-            "outputs": {
-                "circle": extracted_space_time_circle_path,
-                "line": extracted_space_time_line_path,
-                "intervals": intervals_path
-            }
-        }, f, indent=2)
     print(f"  saved outputs to {save_dir}", flush=True)
 
     if plot:

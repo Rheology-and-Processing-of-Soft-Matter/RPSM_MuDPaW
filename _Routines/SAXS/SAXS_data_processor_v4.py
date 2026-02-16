@@ -3,13 +3,15 @@ import os
 import re
 import shutil
 import argparse
+
+# Keep track of generated matplotlib figures (peak 1, peak 2) so the UI can pick which to display
+LAST_FIGS: list = []
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from _Routines.SAXS import P2468OAS_v4 as hop
 from _Routines.SAXS import P2468OAS_v4_2pk as hop2
 from scipy.special import legendre
-import json
 
 # --- Sample naming helper ---
 
@@ -348,16 +350,16 @@ def _find_radial_for_azimuthal(azi_path: str) -> str | None:
     return str(cands[0].resolve())
 
 
-def get_unified_processed_folder(path):
-    """Return the unified `_Processed` folder inside the resolved *reference* folder."""
-    reference_folder = get_reference_folder_from_path(path)
-    processed_root = os.path.join(reference_folder, "_Processed")
-    processed_root = os.path.abspath(processed_root)
-    os.makedirs(processed_root, exist_ok=True)
-    print(f"[SAXS] Using processed folder: {processed_root}")
-    return processed_root
+from _Core.paths import get_processed_root, get_modality_out_dir
 
-from _Routines.common import update_json_file
+def get_unified_processed_folder(path):
+    """Return the unified `_Processed` folder using canonical helper."""
+    reference_folder = get_reference_folder_from_path(path)
+    processed_root = get_processed_root(reference_folder)
+    processed_root.mkdir(parents=True, exist_ok=True)
+    print(f"[SAXS] Using processed folder: {processed_root}")
+    return str(processed_root)
+
 
 try:
     import matplotlib.pyplot as plt
@@ -367,7 +369,8 @@ except Exception:
 
 def SAXS_data_processor(path_name, sample_name, smoo_, sigma_zero, lower_limit, upper_limit, plots=True, method="fitting", mirror=False, two_peak=False, secondary_limits=None, flatten_tail_fit=False, flatten_tail_extent=0.9, average_columns=False, average_group=4, centering_mode="auto", weak_metric="A2", weak_threshold=None, side_mode="auto", side_mode2=None):
     print(f"Processing SAXS data with parameters: {path_name}, {sample_name}, {smoo_}, {sigma_zero}, {lower_limit}, {upper_limit}, method={method}, mirror={mirror}")
-    last_fig = None
+    global LAST_FIGS
+    LAST_FIGS = []
 
     # Convert limits to degrees
     limit_deg = [lower_limit, upper_limit]
@@ -544,12 +547,14 @@ def SAXS_data_processor(path_name, sample_name, smoo_, sigma_zero, lower_limit, 
                         # Use the pyplot instance from the processor module (correct backend)
                         try:
                             if processor is hop2.P2468OAS_v4:
-                                last_fig = hop2.plt.gcf()
+                                fig_obj = hop2.plt.gcf()
                             else:
-                                last_fig = hop.plt.gcf()
+                                fig_obj = hop.plt.gcf()
                         except Exception:
-                            if plt is not None:
-                                last_fig = plt.gcf()
+                            fig_obj = plt.gcf() if plt is not None else None
+                        if fig_obj is not None:
+                            last_fig = fig_obj
+                            LAST_FIGS.append(fig_obj)
                 except Exception as e:
                     print(f"Processing failed for {sample_name2}{tag_suffix}: {e}")
                     return
@@ -596,8 +601,11 @@ def SAXS_data_processor(path_name, sample_name, smoo_, sigma_zero, lower_limit, 
                             print(f"Failed to normalize radial file to CSV: {e}")
 
                 export_path = os.path.join(results_path, f"SAXS_1_{sample_name2}{tag_suffix}_export.csv")
-                column_names = ["P2", "P4", "P6", "OAS"]
-                pd.DataFrame(P2468OAS, columns=column_names).to_csv(export_path, index=False, header=True)
+                # Keep legacy column names for templates, but also expose an explicit P246OAS
+                # alias so each peak always carries its own OAS column.
+                df_export = pd.DataFrame(P2468OAS, columns=["P2", "P4", "P6", "OAS"])
+                df_export["P246OAS"] = df_export["OAS"]
+                df_export.to_csv(export_path, index=False, header=True)
                 saxs_files.append(export_path)
                 print(f"Saved processed data to: {export_path}")
 
@@ -614,72 +622,6 @@ def SAXS_data_processor(path_name, sample_name, smoo_, sigma_zero, lower_limit, 
 
                 print(f"SAXS results saved to unified folder: {results_path}")
 
-                json_path = os.path.join(processed_folder, f"_output_SAXS_{sample_name2}{tag_suffix}.json")
-                rel_suffixes = [os.path.relpath(p, processed_folder) for p in saxs_files]
-                azimuthal_file = load_location
-                azimuthal_file_rel = (
-                    os.path.relpath(azimuthal_file, processed_folder)
-                    if os.path.exists(azimuthal_file) else None
-                )
-                radial_file_rel = (
-                    os.path.relpath(radial_file, processed_folder)
-                    if radial_file and os.path.exists(radial_file) else None
-                )
-                radial_copy_rel = (
-                    os.path.relpath(radial_copy_path, processed_folder)
-                    if radial_copy_path and os.path.exists(radial_copy_path) else None
-                )
-                radial_matrix_csv_rel = (
-                    os.path.relpath(radial_matrix_csv_abs, processed_folder)
-                    if radial_matrix_csv_abs and os.path.exists(radial_matrix_csv_abs) else None
-                )
-                radial_flat_csv_rel = (
-                    os.path.relpath(radial_flat_csv_abs, processed_folder)
-                    if radial_flat_csv_abs and os.path.exists(radial_flat_csv_abs) else None
-                )
-
-                payload = {
-                    "sample_name": f"{sample_name2}{tag_suffix}",
-                    "csv_outputs": saxs_files,
-                    "csv_outputs_rel": rel_suffixes,
-                    "azimuthal_file": azimuthal_file,
-                    "azimuthal_file_rel": azimuthal_file_rel,
-                    "radial_file": radial_file,
-                    "radial_file_rel": radial_file_rel,
-                    "radial_copy": radial_copy_path,
-                    "radial_copy_rel": radial_copy_rel,
-                    "radial_csv": radial_csv_abs,
-                    "radial_csv_rel": radial_csv_rel,
-                    "radial_matrix_csv": radial_matrix_csv_abs,
-                    "radial_matrix_csv_rel": radial_matrix_csv_rel,
-                    "radial_flat_csv": radial_flat_csv_abs,
-                    "radial_flat_csv_rel": radial_flat_csv_rel,
-                    "radial_headers": radial_headers,
-                }
-                try:
-                    with open(json_path, "w") as jf:
-                        json.dump(payload, jf, indent=2)
-                    print(f"Wrote unified JSON: {json_path}")
-                    try:
-                        print("[SAXS] Output summary:")
-                        print(f"  processed root : {processed_folder}")
-                        for p in saxs_files:
-                            print(f"  csv            : {p}")
-                        for label, p_abs, p_rel in (
-                            ("azimuthal", azimuthal_file, azimuthal_file_rel),
-                            ("radial_src", radial_file, radial_file_rel),
-                            ("radial_copy", radial_copy_path, radial_copy_rel),
-                            ("radial_matrix_csv", radial_matrix_csv_abs, radial_matrix_csv_rel),
-                            ("radial_flat_csv", radial_flat_csv_abs, radial_flat_csv_rel),
-                        ):
-                            if p_abs:
-                                print(f"  {label:14s}: {p_abs} (rel {p_rel})")
-                        print(f"  json           : {json_path}")
-                    except Exception:
-                        pass
-                except Exception as e:
-                    print(f"Failed to write JSON {json_path}: {e}")
-
             if two_peak and secondary_limits:
                 _process_one_peak("_p1", (lower_limit, upper_limit), side_mode)
                 _process_one_peak("_p2", secondary_limits, side_mode2 or side_mode)
@@ -691,7 +633,8 @@ def SAXS_data_processor(path_name, sample_name, smoo_, sigma_zero, lower_limit, 
             plt.show = show_backup
         except Exception:
             pass
-    return last_fig
+    # Return latest fig for backward compatibility; list is stored in LAST_FIGS
+    return LAST_FIGS[-1] if LAST_FIGS else None
 
 def _parse_cli_args():
     parser = argparse.ArgumentParser(

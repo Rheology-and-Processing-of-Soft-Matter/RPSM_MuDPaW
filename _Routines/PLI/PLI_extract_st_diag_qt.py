@@ -6,6 +6,10 @@ import numpy as np
 import cv2
 from PIL import Image
 
+from _UI_modules.PLI_helper import get_reference_folder_from_path, _sanitize_misjoined_user_path
+from _Core.paths import get_processed_root
+from _Core.params import save_last_params
+
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -85,18 +89,11 @@ def get_reference_folder_from_path(path):
 
 
 def get_unified_processed_folder(path):
+    """Canonical PLI processed folder: <reference>/_Processed>."""
     reference_folder = get_reference_folder_from_path(path)
-    reference_folder = _sanitize_misjoined_user_path(reference_folder)
-    reference_folder = os.path.abspath(reference_folder)
-    if not reference_folder.startswith(os.sep):
-        reference_folder = os.sep + reference_folder
-    processed_root = os.path.join(reference_folder, "_Processed", "PLI")
-    processed_root = _sanitize_misjoined_user_path(processed_root)
-    processed_root = os.path.abspath(processed_root)
-    if not processed_root.startswith(os.sep):
-        processed_root = os.sep + processed_root
-    os.makedirs(processed_root, exist_ok=True)
-    return processed_root
+    processed_root = get_processed_root(reference_folder)
+    processed_root.mkdir(parents=True, exist_ok=True)
+    return str(processed_root)
 
 
 _last_n_angles = 360
@@ -1064,6 +1061,13 @@ class ExtractorWindow(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Input error", str(e))
             return
+        # Persist "last used" params for this mode
+        try:
+            ref = get_reference_folder_from_path(self.target_videos[0]) if self.target_videos else None
+            if ref:
+                save_last_params(ref, "PLI", f"extract_{config.get('mode','unknown')}", config)
+        except Exception as e:
+            print(f"[PLI] Warning: could not save last extract params: {e}")
 
         try:
             for vid in self.target_videos:

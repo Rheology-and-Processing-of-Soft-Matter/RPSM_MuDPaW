@@ -59,11 +59,12 @@ def load_callable(module_name: str, candidates: list[str]):
 
 def run_saxs_for_folder(ref_dir: Path, cfg: dict, skip_if_up_to_date=True, dry_run=False):
     raw_dir = ref_dir / "SAXS"
-    out_dir = ensure_dir(ref_dir / cfg.get("output_dirname", "_Processed/SAXS"))
+    out_dir = ensure_dir(ref_dir / cfg.get("output_dirname", "_Processed"))
     inputs = list(list_files_recursive(raw_dir))
-    outputs = [out_dir / "output_SAXS.json", out_dir / "output_SAXS.csv"]
+    # Use actual CSV outputs (no JSON) to judge freshness
+    outputs = list(out_dir.glob("SAXS_1_*_export.csv")) + list(out_dir.glob("SAXS_2_*")) + list(out_dir.glob("SAXS_radial_*"))
 
-    if skip_if_up_to_date and is_up_to_date([str(p) for p in inputs], [str(p) for p in outputs]):
+    if skip_if_up_to_date and outputs and is_up_to_date([str(p) for p in inputs], [str(p) for p in outputs]):
         return {"status":"skipped_up_to_date","out":str(out_dir)}
     if dry_run:
         return {"status":"dry_run","inputs":len(inputs),"out":str(out_dir)}
@@ -81,11 +82,11 @@ def run_saxs_for_folder(ref_dir: Path, cfg: dict, skip_if_up_to_date=True, dry_r
 
 def run_rheology_for_folder(ref_dir: Path, cfg: dict, skip_if_up_to_date=True, dry_run=False):
     raw_dir = ref_dir / "Rheology"
-    out_dir = ensure_dir(ref_dir / cfg.get("output_dirname", "_Processed/Rheology"))
+    out_dir = ensure_dir(ref_dir / cfg.get("output_dirname", "_Processed"))
     inputs = list(list_files_recursive(raw_dir, exts=[".csv",".txt",".tsv"]))
-    outputs = [out_dir / "output_viscosity.json", out_dir / "output_viscosity.csv"]
+    outputs = list(out_dir.glob("rheo_*.csv")) + list(out_dir.glob("visco_*.csv"))
 
-    if skip_if_up_to_date and is_up_to_date([str(p) for p in inputs], [str(p) for p in outputs]):
+    if skip_if_up_to_date and outputs and is_up_to_date([str(p) for p in inputs], [str(p) for p in outputs]):
         return {"status":"skipped_up_to_date","out":str(out_dir)}
     if dry_run:
         return {"status":"dry_run","inputs":len(inputs),"out":str(out_dir)}

@@ -4,8 +4,8 @@
   "beamline": "ForMAX",
   "proposal": "20251185",
   "visit": "2026021208",
-  "local_azint": "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/Temp/FR/20251185/AES:LiTFSI:2.5%CNC_87,5degC/_Temp/formax/20251185/2026021208/azint",
-  "scans_text": "101",
+  "local_azint": "/Users/kroland/Library/Mobile Documents/com~apple~CloudDocs/Temp/FR/20251185/AES:LiTFSI (O:Li=17)_75degC/_Temp/formax/20251185/2026021208/azint",
+  "scans_text": "212",
   "embed_rows": [
     {
       "Name": "AES:LiTFSI (O:Li=17)_25degC",
@@ -91,8 +91,8 @@
   "bg_scan": "101",
   "bg_frames": "",
   "scan_frames": "",
-  "q_range": "0.005-0.01",
-  "bin_frames": 1,
+  "q_range": "0.006-0.1",
+  "bin_frames": 4,
   "bg_subtract": false,
   "bg_coeff": 1.0,
   "last_output_dir": ""

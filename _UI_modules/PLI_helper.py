@@ -6,7 +6,9 @@ from tkinter import messagebox
 import numpy as np
 import pandas as pd
 import cv2
+from pathlib import Path
 from _Routines.common import normalize_modal_json
+from _Core.paths import get_processed_root
 
 # --- Path hygiene helper (fixes accidentally concatenated absolute paths) ---
 
@@ -51,53 +53,47 @@ def get_reference_folder_from_path(path):
     """
     markers = {"PLI", "PI", "SAXS", "Rheology"}
 
-    # Normalize
-    path = os.path.realpath(path)
+    # Normalize and sanitize double-joined paths early
+    path = _sanitize_misjoined_user_path(os.path.realpath(path))
     abspath = _sanitize_misjoined_user_path(os.path.abspath(path))
     if os.path.isfile(abspath):
         abspath = os.path.dirname(abspath)
 
     parts = _split_parts(abspath)
 
+    def _abs_from_parts(prefix_parts):
+        """Rebuild an absolute path from normalized parts without letting CWD leak in."""
+        if not prefix_parts:
+            return os.sep
+        reference = os.sep + os.path.join(*prefix_parts)
+        # sanitise again in case of accidental double-join
+        reference = _sanitize_misjoined_user_path(reference)
+        reference = os.path.abspath(reference)
+        return reference if reference else os.sep
+
     # Anchor to the parent of an existing _Processed, if present
     for i in range(len(parts) - 1, -1, -1):
         if parts[i] == "_Processed":
-            reference = os.sep.join(parts[:i])
-            reference = os.path.abspath(reference)
-            if not reference.startswith(os.sep):
-                reference = os.sep + reference
-            return reference if reference else os.sep
+            return _abs_from_parts(parts[:i])
 
     # Next, search for a modality folder
     for i in range(len(parts) - 1, -1, -1):
         if parts[i] in markers:
-            if i - 1 >= 0 and parts[i - 1] == "_Processed":
-                reference = os.sep.join(parts[: i - 1])
-            else:
-                reference = os.sep.join(parts[:i])
-            reference = os.path.abspath(reference)
-            if not reference.startswith(os.sep):
-                reference = os.sep + reference
-            return reference if reference else os.sep
+            prefix_idx = i - 1 if (i - 1 >= 0 and parts[i - 1] == "_Processed") else i
+            return _abs_from_parts(parts[:prefix_idx])
 
     # Fallback: the directory itself
-    abspath = os.path.abspath(abspath)
-    if not abspath.startswith(os.sep):
-        abspath = os.sep + abspath
-    return abspath
+    return _abs_from_parts(parts)
 
 
 def get_unified_processed_folder(path):
-    """Return `<reference>/_Processed/PLI` for PLI outputs, creating it if needed."""
+    """Return `<reference>/_Processed` using canonical processed-root helper."""
     reference_folder = get_reference_folder_from_path(path)
-    processed_root = os.path.join(reference_folder, "_Processed", "PLI")
-    processed_root = _sanitize_misjoined_user_path(processed_root)
-    if not processed_root.startswith(os.sep):
-        processed_root = os.sep + processed_root
-    processed_root = os.path.abspath(processed_root)
+    processed_root = get_processed_root(reference_folder)
+    processed_root = processed_root.resolve()
     print(f"[PLI] unified processed root → reference: {reference_folder}\n                                   processed: {processed_root}")
-    os.makedirs(processed_root, exist_ok=True)
-    return processed_root
+    processed_root.mkdir(parents=True, exist_ok=True)
+    return str(processed_root)
 
 # --- Unscaled Stitched Panel Discovery in _Temp ---
 

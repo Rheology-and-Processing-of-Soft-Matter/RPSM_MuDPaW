@@ -3,10 +3,13 @@ from __future__ import annotations
 import csv
 import json
 import os
-from _Writer.dg_runner import run_datagraph_write
 import subprocess
 from pathlib import Path
 from typing import Dict, List
+
+from _Core.paths import get_processed_root
+
+from _Writer.dg_runner import run_datagraph_write
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -35,7 +38,6 @@ class WriteUI:
     def __init__(self, main_window):
         self.main = main_window
         self.writeGridCells: Dict[tuple[int, int], QComboBox] = {}
-        self._write_saxs_json_by_name: Dict[str, str] = {}
         self._write_outputs_by_modality: Dict[str, List[dict]] = {}
         self._write_refreshed_once = False
         self._write_processed_root: Path | None = None
@@ -499,84 +501,31 @@ class WriteUI:
 
     def _collect_write_outputs(self) -> None:
         self._write_outputs_by_modality = {"SAXS": [], "PI": [], "PLI": [], "Rheology": []}
-        self._write_saxs_json_by_name = {}
         project_path = self.main.project_path
         if not project_path:
             return
-        processed = Path(project_path) / "_Processed"
+        processed = get_processed_root(project_path)
         self._write_processed_root = processed
-        if not processed.is_dir():
+        if not processed.exists():
             return
-        search_dirs = [processed]
-        for child in processed.iterdir():
-            if child.is_dir():
-                search_dirs.append(child)
-        found_json = False
-        for folder in search_dirs:
-            for fname in os.listdir(folder):
-                low = fname.lower()
-                if not low.endswith(".json"):
-                    continue
-                if not (low.startswith("output_") or low.startswith("_output_")):
-                    continue
-                fpath = Path(folder) / fname
-                modality = self._modality_from_output_name(fname)
-                if modality not in self._write_outputs_by_modality:
-                    continue
-                found_json = True
-                try:
-                    with open(fpath, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                except Exception:
-                    data = None
-
-                entries = []
-                if isinstance(data, dict) and isinstance(data.get("datasets"), dict):
-                    for key, entry in data["datasets"].items():
-                        name = entry.get("name") if isinstance(entry, dict) else None
-                        dataset_name = name or key
-                        entries.append({"name": dataset_name, "json_path": str(fpath), "entry": entry})
-                elif isinstance(data, list):
-                    for entry in data:
-                        if not isinstance(entry, dict):
-                            continue
-                        dataset_name = entry.get("name") or entry.get("sample") or entry.get("label")
-                        if not dataset_name:
-                            dataset_name = self._clean_output_basename(fname, modality)
-                        entries.append({"name": dataset_name, "json_path": str(fpath), "entry": entry})
-                elif isinstance(data, dict):
-                    dataset_name = data.get("name") or data.get("sample") or data.get("label")
-                    if not dataset_name:
-                        dataset_name = self._clean_output_basename(fname, modality)
-                    entries.append({"name": dataset_name, "json_path": str(fpath), "entry": data})
-
-                self._write_outputs_by_modality[modality].extend(entries)
-                if modality == "SAXS":
-                    for e in entries:
-                        if isinstance(e.get("name"), str):
-                            self._write_saxs_json_by_name[e["name"]] = str(fpath)
-
-        # Fallback: if no JSONs were found or a modality has no entries, scan _Processed for prefixed files.
-        if not found_json:
-            for modality in self._write_outputs_by_modality.keys():
-                self._write_outputs_by_modality[modality] = self._fallback_scan_processed(modality)
-        else:
-            for modality, entries in self._write_outputs_by_modality.items():
-                if not entries:
-                    self._write_outputs_by_modality[modality] = self._fallback_scan_processed(modality)
+        # Pure filename-based discovery (no JSON dependency)
+        print(f"[WRITER] processed_root={processed} -- JSON disabled; using filename scan only")
+        for modality in self._write_outputs_by_modality.keys():
+            self._write_outputs_by_modality[modality] = self._fallback_scan_processed(modality)
 
     def _fallback_scan_processed(self, modality: str) -> List[dict]:
         if not self._write_processed_root:
             return []
         prefixes = {
-            "SAXS": ("saxs_",),
-            "PI": ("pi_",),
-            "PLI": ("pli_",),
-            "Rheology": ("rheo_", "rheology_", "visco_", "viscosity_"),
+            # Order matters for collision avoidance: PLI before PI, explicit dg before base.
+            "PLI": ("_dg_pli_", "_pli_"),
+            "PI": ("_dg_pi_", "_pi_"),
+            "SAXS": ("saxs_1_", "saxs_2_", "saxs_radial_"),
+            "Rheology": ("_rheo_", "_visco_"),
         }
         allowed_exts = {".csv", ".dat", ".txt"}
         names_to_files: Dict[str, List[str]] = {}
-        for folder in [self._write_processed_root] + [p for p in self._write_processed_root.iterdir() if p.is_dir()]:
+        for folder in [self._write_processed_root] + [p for p in self._write_processed_root.iterdir() if p.is_dir() and p.name != "_Other"]:
             for path in folder.iterdir():
                 if not path.is_file():
                     continue
@@ -748,9 +697,10 @@ class WriteUI:
 
         # Save all DataGraph outputs inside the current reference folder's unified
         # `_Processed` tree (rather than the template location or an old/fixed path).
-        processed_root = self._write_processed_root or Path(project_path) / "_Processed"
+        processed_root = self._write_processed_root or get_processed_root(project_path)
         self._write_processed_root = processed_root
-        output_dir = processed_root
+        ref_root = Path(project_path).resolve()
+        output_dir = ref_root  # write .dgraph next to the reference folder, not inside _Processed
         dry_run = self.chkDryRun.isChecked()
         self.main.logger.info(f"[Write] Using template: {template_path}")
         self.main.logger.info(f"[Write] DataGraph path: {exec_path}")
@@ -841,10 +791,11 @@ class WriteUI:
             QMessageBox.information(self.main, "Write", "No rows available to write.")
             return
 
-        # Keep Rheology concat outputs inside the unified _Processed tree.
-        processed_root = self._write_processed_root or Path(project_path) / "_Processed"
+        # Concat temp stays in _Processed, but final .dgraph goes to reference root.
+        processed_root = self._write_processed_root or get_processed_root(project_path)
         self._write_processed_root = processed_root
-        output_dir = processed_root
+        ref_root = Path(project_path).resolve()
+        output_dir = ref_root
         temp_dir = processed_root / "Write"
         dry_run = self.chkDryRun.isChecked()
         self.main.logger.info(f"[Write] Using template: {template_path}")
@@ -962,7 +913,7 @@ class WriteUI:
             ("rad_matrix", "SAXS_radial_matrix_*.csv"),
         ]
         extras: List[str] = []
-        search_dirs = [self._write_processed_root]  # restrict to _Processed root
+        search_dirs = [self._write_processed_root, self._write_processed_root / "SAXS"]
         seen_keys = set()
 
         def matches_tag(path: Path) -> bool:
@@ -976,7 +927,18 @@ class WriteUI:
                         continue
                     for path in folder.glob(pat):
                         if path.is_file() and matches_tag(path):
-                            extras.append(str(path.resolve()))
+                            p_resolved = path.resolve()
+                            # Ensure legacy exports have P246OAS column for DataGraph templates.
+                            if key == "export":
+                                try:
+                                    df = pd.read_csv(p_resolved)
+                                    if "OAS" in df.columns and "P246OAS" not in df.columns:
+                                        df["P246OAS"] = df["OAS"]
+                                        df.to_csv(p_resolved, index=False)
+                                        self.main.logger.info(f"[Write] Added P246OAS to {p_resolved.name}")
+                                except Exception:
+                                    pass
+                            extras.append(str(p_resolved))
                             seen_keys.add(key)
                             break  # only first match per pattern
             except Exception:
@@ -1111,12 +1073,7 @@ class WriteUI:
             if combo:
                 combo.setCurrentText("None")
             return
-        json_path = self._write_saxs_json_by_name.get(saxs_name)
-        radial = None
-        if json_path:
-            radial = self._radial_from_saxs_json(json_path)
-        if radial is None and json_path:
-            radial = self._auto_find_radial_for_azi_input(json_path)
+        radial = self._find_radial_for_saxs_name(saxs_name)
         if radial:
             radial = self._prefer_radial_csv(radial)
             combo = self.writeGridCells.get((row, 4))
@@ -1125,18 +1082,26 @@ class WriteUI:
                     combo.addItem(radial)
                 combo.setCurrentText(radial)
 
-    def _auto_find_radial_for_azi_input(self, azi_input: str | Path) -> str | None:
-        try:
-            p = Path(azi_input).expanduser()
-        except Exception:
+    def _find_radial_for_saxs_name(self, saxs_name: str) -> str | None:
+        """Filename-based radial lookup (no JSON)."""
+        if not self._write_processed_root:
             return None
-        folder = p if p.is_dir() else p.parent
-        if not folder.exists():
-            return None
-        cands = sorted(q for q in folder.glob("rad_saxs*.csv") if q.is_file())
-        if not cands:
-            cands = sorted(q for q in folder.glob("*rad*.*") if q.is_file() and q.suffix.lower() == ".csv")
-        return str(cands[0].resolve()) if cands else None
+        tag = saxs_name.lower().replace(" ", "_")
+        search_dirs = [self._write_processed_root, self._write_processed_root / "SAXS"]
+        best: tuple[int, Path] | None = None
+        for folder in search_dirs:
+            if not folder.exists():
+                continue
+            for path in folder.glob("SAXS_radial_*"):
+                if not path.is_file():
+                    continue
+                stem = path.stem.lower()
+                if tag not in stem:
+                    continue
+                score = 0 if "matrix" in stem else 1 if "flat" in stem else 2
+                if best is None or score < best[0]:
+                    best = (score, path)
+        return str(best[1].resolve()) if best else None
 
     def _prefer_radial_csv(self, path: str | Path) -> str:
         try:
@@ -1157,35 +1122,3 @@ class WriteUI:
         if csv_candidate.exists():
             return str(csv_candidate)
         return str(p)
-
-    def _radial_from_saxs_json(self, json_path: str | Path) -> str | None:
-        try:
-            payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
-        except Exception:
-            payload = None
-
-        def _scan_entry(entry):
-            if not isinstance(entry, dict):
-                return None
-            for key in ("file", "path", "source", "input", "azimuthal_file"):
-                val = entry.get(key)
-                if isinstance(val, str):
-                    radial = self._auto_find_radial_for_azi_input(val)
-                    if radial:
-                        return radial
-            for key in ("radial_matrix_csv", "radial_flat_csv", "radial_csv", "radial_copy", "radial_file"):
-                val = entry.get(key)
-                if isinstance(val, str) and val:
-                    return self._prefer_radial_csv(val)
-            return None
-
-        if isinstance(payload, dict):
-            radial = _scan_entry(payload)
-            if radial:
-                return radial
-        elif isinstance(payload, list):
-            for entry in payload:
-                radial = _scan_entry(entry)
-                if radial:
-                    return radial
-        return None

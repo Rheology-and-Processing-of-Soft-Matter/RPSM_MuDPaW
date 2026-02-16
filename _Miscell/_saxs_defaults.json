@@ -1,19 +1,19 @@
 {
   "smoothing": 0.0,
   "sigma": 0.5,
-  "theta_min": 0.0,
-  "theta_max": 180.0,
+  "theta_min": 20.0,
+  "theta_max": 140.0,
   "method": "direct",
   "mirror": false,
-  "lower2": 0.0,
-  "upper2": 180.0,
+  "lower2": 170.0,
+  "upper2": 190.0,
   "tail_fit": false,
-  "fit_extent": 0.9,
+  "fit_extent": 0.7,
   "average": false,
   "average_group": 1,
   "centering_mode": "auto",
   "weak_metric": "A2",
   "weak_threshold": "",
   "side_mode": "right",
-  "side_mode2": "auto"
+  "side_mode2": "right"
 }

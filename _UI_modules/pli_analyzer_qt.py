@@ -37,10 +37,9 @@ try:
 except Exception as e:  # pragma: no cover
     DataAnalyzer = None
 
-try:
-    from _UI_modules.PLI_helper import get_unified_processed_folder
-except Exception:  # pragma: no cover
-    get_unified_processed_folder = None
+from _Core.paths import get_processed_root
+from _Core.params import save_params, load_params
+from _UI_modules.PLI_helper import get_reference_folder_from_path, _sanitize_misjoined_user_path
 
 
 class PLIAnalyzerPreview(QWidget):
@@ -219,7 +218,7 @@ class PLIAnalyzerController:
     def __init__(self, stitched_path: str, preview: PLIAnalyzerPreview, controls: PLIAnalyzerControls):
         self.preview = preview
         self.controls = controls
-        self.stitched_path = stitched_path
+        self.stitched_path = _sanitize_misjoined_user_path(stitched_path)
         self._L = None
         self._a = None
         self._b = None
@@ -255,6 +254,30 @@ class PLIAnalyzerController:
         self.controls.btnAccept.clicked.connect(self._accept_fit_save)
         self.controls.btnShowR2.clicked.connect(self._show_r2_table)
         self.controls.btnReset.clicked.connect(self._reset_view)
+        # Auto-load last params for this stitched sample
+        try:
+            base = os.path.splitext(os.path.basename(self.stitched_path))[0]
+            ref = get_reference_folder_from_path(self.stitched_path)
+            saved = load_params(ref, "PLI", "process", base)
+            if saved and isinstance(saved.get("payload"), dict):
+                p = saved["payload"]
+                aw = p.get("angle_window")
+                if aw and len(aw) == 2:
+                    self.controls.ang0.setValue(float(aw[0]))
+                    self.controls.ang1.setValue(float(aw[1]))
+                if p.get("param"):
+                    self.controls.paramCombo.setCurrentText(str(p["param"]))
+                if p.get("model"):
+                    self.controls.fitModelCombo.setCurrentText(str(p["model"]))
+                self.controls.baseCheck.setChecked(bool(p.get("baseline")))
+                if p.get("base_method"):
+                    self.controls.baseMethodCombo.setCurrentText(str(p["base_method"]))
+                if p.get("base_idx") is not None:
+                    self.controls.baseIdxSpin.setValue(int(p["base_idx"]))
+                if p.get("show_fits") is not None:
+                    self.controls.showFitsCheck.setChecked(bool(p["show_fits"]))
+        except Exception as e:
+            print(f"[PLI] Warning: could not load saved params: {e}")
 
     def _on_ang_spin_changed(self, _val: float) -> None:
         """Keep sliders in sync when spins change and refresh preview."""
@@ -593,12 +616,21 @@ class PLIAnalyzerController:
         self.preview.plot_results(FWHM_vec, auc_vec=AUC_exp_vec)
 
         # Export CSVs + master JSON
-        out_root = get_unified_processed_folder(self.stitched_path) if callable(get_unified_processed_folder) else None
-        if out_root is None:
-            out_root = os.path.dirname(self.stitched_path)
-        out_dir = os.path.join(out_root, "PLI")
-        os.makedirs(out_dir, exist_ok=True)
-        base = os.path.splitext(os.path.basename(self.stitched_path))[0]
+        original_stitched = self.stitched_path
+        stitched_path = _sanitize_misjoined_user_path(self.stitched_path)
+        self.stitched_path = stitched_path  # persist the sanitized path
+        reference_folder = get_reference_folder_from_path(stitched_path)
+        reference_folder = _sanitize_misjoined_user_path(reference_folder)
+        reference_folder = os.path.abspath(reference_folder)
+        out_root = get_processed_root(reference_folder)
+        out_root.mkdir(parents=True, exist_ok=True)
+        print(f"[PLI] stitched_raw={original_stitched}")
+        print(f"[PLI] stitched={stitched_path}")
+        print(f"[PLI] ref={reference_folder}")
+        print(f"[PLI] processed_root={out_root}")
+        print(f"[PLI] out_dir={out_root}")
+        out_dir = out_root  # already .../_Processed
+        base = os.path.splitext(os.path.basename(stitched_path))[0]
         csv_out = os.path.join(out_dir, f"_pli_{base}_maltese_summary.csv")
         df_out = pd.DataFrame({
             "interval_global": cols,
@@ -608,7 +640,11 @@ class PLIAnalyzerController:
             "HUH": np.asarray(HUH_vec),
             "AUC_exp_norm": np.asarray(AUC_exp_vec),
         })
-        df_out.to_csv(csv_out, index=False)
+        try:
+            df_out.to_csv(csv_out, index=False)
+            print(f"[PLI] wrote summary CSV: {csv_out}")
+        except Exception as e:
+            print(f"[PLI] ERROR writing summary CSV: {csv_out}: {e}")
 
         dg_csv = os.path.join(out_dir, f"_dg_pli_{base}_maltese.csv")
         dg_df = pd.DataFrame({
@@ -618,54 +654,25 @@ class PLIAnalyzerController:
             "HUH": np.asarray(HUH_vec),
             "AUC_exp": np.asarray(AUC_exp_vec),
         })
-        dg_df.to_csv(dg_csv, index=False)
-
-        # Update master JSON
-        master_json = os.path.join(out_dir, f"_output_PLI_{base}.json")
-        master_obj = {
-            "mode": "pli",
-            "source_png": os.path.abspath(self.stitched_path),
-            "processed_folder": out_root,
-            "datasets": {},
-        }
-        if os.path.isfile(master_json):
-            try:
-                with open(master_json, "r") as _f:
-                    master_obj = json.load(_f) or master_obj
-            except Exception:
-                pass
-        if not isinstance(master_obj.get("datasets"), dict):
-            master_obj["datasets"] = {}
-        key = base
-        entry = master_obj["datasets"].get(key, {})
-        if not isinstance(entry.get("maltese_cross"), dict):
-            entry["maltese_cross"] = {}
-        analysis_tag = f"{self.controls.paramCombo.currentText()}|x{a_lo:.3f}-{a_hi:.3f}"
-        entry["maltese_cross"][analysis_tag] = {
-            "parameter": self.controls.paramCombo.currentText(),
-            "axis_limits": [a_lo, a_hi],
-            "x_axis_units": "unit",
-            "summary_csv": os.path.abspath(csv_out),
-            "summary_csv_rel": os.path.basename(csv_out),
-            "columns": list(df_out.columns),
-            "auc_source": "experimental_trapz",
-            "auc_fit_included": False,
-            "n_intervals_total": int(self._n_intervals),
-            "intervals_analyzed": {"start": 0, "end": int(self._n_intervals - 1)},
-            "datagraph_ready": True,
-            "datagraph_csv": os.path.abspath(dg_csv),
-            "datagraph_csv_rel": os.path.basename(dg_csv),
-        }
-        if not isinstance(entry.get("dg_exports"), list):
-            entry["dg_exports"] = []
-        if os.path.abspath(dg_csv) not in entry["dg_exports"]:
-            entry["dg_exports"].append(os.path.abspath(dg_csv))
-        master_obj["datasets"][key] = entry
         try:
-            with open(master_json, "w") as _f:
-                json.dump(master_obj, _f, indent=2)
-        except Exception:
-            pass
+            dg_df.to_csv(dg_csv, index=False)
+            print(f"[PLI] wrote DG CSV: {dg_csv}")
+        except Exception as e:
+            print(f"[PLI] ERROR writing DG CSV: {dg_csv}: {e}")
+
+        # JSON metadata removed: filenames are the source of truth for writer/batch.
+        try:
+            save_last_params(reference_folder, "PLI", "process", {
+                "param": self.controls.paramCombo.currentText(),
+                "angle_window": [a_lo, a_hi],
+                "baseline": bool(self.controls.baseCheck.isChecked()),
+                "base_method": self.controls.baseMethodCombo.currentText(),
+                "base_idx": int(self.controls.baseIdxSpin.value()),
+                "show_fits": bool(self.controls.showFitsCheck.isChecked()),
+                "model": model_sel,
+            })
+        except Exception as e:
+            print(f"[PLI] Warning: could not save last params: {e}")
 
         QMessageBox.information(self.controls, "Analyzer", f"Saved:\\n{csv_out}\\n{dg_csv}")
 

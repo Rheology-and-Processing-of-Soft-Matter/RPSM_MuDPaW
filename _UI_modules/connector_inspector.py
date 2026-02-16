@@ -484,6 +484,20 @@ class ConnectorInspector:
         self.btnLoadList.clicked.connect(self._load_embed_list)
         self.btnPreviewRaw.clicked.connect(self._preview_raw)
 
+    # -----------------
+    # Helpers
+    # -----------------
+
+    def _format_scan_name(self, scan_ids: list[int]) -> str:
+        """Consistent naming for preview/list outputs.
+        Single scan → scan_####; range → scan_####-####.
+        """
+        if not scan_ids:
+            return "scan"
+        if len(scan_ids) == 1 or scan_ids[0] == scan_ids[-1]:
+            return f"scan_{scan_ids[0]:04d}"
+        return f"scan_{scan_ids[0]:04d}-{scan_ids[-1]:04d}"
+
     def _connect(self) -> None:
         self._save_state()
         host = self.editHost.text().strip()
@@ -956,7 +970,7 @@ class ConnectorInspector:
             self._log("Enter scan IDs to process (e.g., 569-597).")
             return
         row = {
-            "Name": f"scan_{scan_ids[0]}-{scan_ids[-1]}",
+            "Name": self._format_scan_name(scan_ids),
             "Scan interval": self.editScans.text().strip(),
         }
         out_dir = None
@@ -1020,7 +1034,7 @@ class ConnectorInspector:
         if not scan_ids:
             self._log("Enter scan IDs to embed (e.g., 569-597).")
             return
-        name = f"scan_{scan_ids[0]}-{scan_ids[-1]}"
+        name = self._format_scan_name(scan_ids)
         row = {
             "Name": name,
             "Detail": "",
